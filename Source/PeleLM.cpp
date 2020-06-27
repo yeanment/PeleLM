@@ -4767,10 +4767,10 @@ PeleLM::temperature_stats (MultiFab& S)
     auto scaleMin = VectorMin({&S},FabArrayBase::mfiter_tile_size,Density,NUM_STATE-BL_SPACEDIM,0);
     auto scaleMax = VectorMax({&S},FabArrayBase::mfiter_tile_size,Density,NUM_STATE-BL_SPACEDIM,0);
 
-    bool aNegY = false;
-    for (int i = 0; i < nspecies && !aNegY; ++i) {
-      if (scaleMin[first_spec+i-BL_SPACEDIM] < 0) aNegY = true;
-    }
+    //bool aNegY = false;
+    //for (int i = 0; i < nspecies && !aNegY; ++i) {
+    //  if (scaleMin[first_spec+i-BL_SPACEDIM] < 0) aNegY = true;
+    //}
 
     amrex::Print() << "  Min,max temp = " << scaleMin[Temp   - BL_SPACEDIM]
                    << ", "                << scaleMax[Temp   - BL_SPACEDIM] << '\n';
@@ -4779,18 +4779,20 @@ PeleLM::temperature_stats (MultiFab& S)
     amrex::Print() << "  Min,max rhoh = " << scaleMin[RhoH   - BL_SPACEDIM]
                    << ", "                << scaleMax[RhoH   - BL_SPACEDIM] << '\n';
 
-    if (aNegY){
-        Vector<std::string> names;
-        EOS::speciesNames(names);
-        amrex::Print() << "  Species w/min < 0: ";
-        for (int i = 0; i < nspecies; ++i) {
+    //if (aNegY){
+      Vector<std::string> names;
+      EOS::speciesNames(names);
+      //amrex::Print() << "  Species w/min < 0: ";
+      for (int i = 0; i < nspecies; ++i) {
         int idx = first_spec + i - BL_SPACEDIM;
-        if ( scaleMin[idx] < 0) {
-          amrex::Print() << "Y(" << names[i] << ") [" << scaleMin[idx] << "]  ";
-        }
+        //if ( scaleMin[idx] < 0) {
+        //  amrex::Print() << "Y(" << names[i] << ") [" << scaleMin[idx] << "]  ";
+        //}
+        amrex::Print() << "  Y(" << names[i] << ") min,max = " << scaleMin[idx]
+                       << ", "                                 << scaleMax[idx] << '\n';
       }
       amrex::Print() << '\n';
-    }   
+    //}
   }
 }
 
