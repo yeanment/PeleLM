@@ -6113,6 +6113,25 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     EdgeFlux[dir]->setVal(0.0);
   }
 
+
+        MultiFab cfluxes[AMREX_SPACEDIM];
+        MultiFab edgestate[AMREX_SPACEDIM];
+
+        // NO Gghost nodes???
+        int nghost = 0;
+        for (int i(0); i < AMREX_SPACEDIM; i++)
+        {
+            const BoxArray& ba = getEdgeBoxArray(i);
+            cfluxes[i].define(ba, dmap, NUM_SPECIES+3, nghost);
+            cfluxes[i].setVal(0.0);
+            edgestate[i].define(ba, dmap, NUM_SPECIES+3, nghost);
+        }
+
+
+
+
+
+
   // Advect RhoY 
 {
   Vector<BCRec> math_bcs(NUM_SPECIES);
@@ -6128,17 +6147,12 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
   Godunov::ComputeAofs(*aofs, first_spec, NUM_SPECIES,
                         Smf, rhoYcomp,
                         AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                        AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), first_spec, false,
-                        AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), first_spec,
+                        AMREX_D_DECL(edgestate[0], edgestate[1], edgestate[2]), rhoYcomp, false,
+                        AMREX_D_DECL(cfluxes[0], cfluxes[1], cfluxes[2]), rhoYcomp,
                         Force, 0, DivU, math_bcs, geom, iconserv,
                         dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 }
 
-  for (int d=0; d<AMREX_SPACEDIM; ++d)
-  { 
-    EdgeState[d]->FillBoundary(geom.periodicity());
-    EdgeFlux[d]->FillBoundary(geom.periodicity());
-  }
 aofs->FillBoundary(geom.periodicity());
 
   // Set flux, flux divergence, and face values for rho as sums of the corresponding RhoY quantities
@@ -6149,43 +6163,45 @@ aofs->FillBoundary(geom.periodicity());
   {
     const Box bx = S_mfi.tilebox();
 
-    auto const& adv_rho   = aofs->array(S_mfi,Density);
-    auto const& adv_rhoY  = aofs->array(S_mfi,first_spec);
-    amrex::ParallelFor(bx, [ adv_rho, adv_rhoY ]
-    AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-    {
-      adv_rho(i,j,k) = 0.0;
-      for (int n = 0; n < NUM_SPECIES; n++) {
-        adv_rho(i,j,k) += adv_rhoY(i,j,k,n);
-      }
-    });
 
-    for (int dir=0; dir<AMREX_SPACEDIM; dir++)
-    {
-      const Box& ebx = S_mfi.grownnodaltilebox(dir,EdgeState[dir]->nGrow());
-//const Box& ebx =amrex::surroundingNodes(bx,dir);
-      auto const& rho    = EdgeState[dir]->array(S_mfi,Density);
-      auto const& rho_F  = EdgeFlux[dir]->array(S_mfi,Density);
-      auto const& rhoY   = EdgeState[dir]->array(S_mfi,first_spec);
-      auto const& rhoY_F = EdgeFlux[dir]->array(S_mfi,first_spec);
-      amrex::ParallelFor(ebx, [rho, rho_F, rhoY, rhoY_F]
-      AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-      {
-        rho(i,j,k) = 0.0;
-        rho_F(i,j,k) = 0.0;
-        for (int n = 0; n < NUM_SPECIES; n++) {
-          rho(i,j,k) += rhoY(i,j,k,n);
-          rho_F(i,j,k) += rhoY_F(i,j,k,n);
-        }
-      });
-    }
+ // Set flux, flux divergence, and face values for rho as sums of the corresponding RhoY quantities
+         auto const& adv_rho   = aofs->array(S_mfi,Density);  
+         auto const& adv_rhoY  = aofs->array(S_mfi,first_spec);  
+         amrex::ParallelFor(bx, [ adv_rho, adv_rhoY ]
+         AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+         {
+            adv_rho(i,j,k) = 0.0; 
+            for (int n = 0; n < NUM_SPECIES; n++) {
+               adv_rho(i,j,k) += adv_rhoY(i,j,k,n);
+            }
+         });
+
+         for (int dir=0; dir<AMREX_SPACEDIM; dir++)
+         {
+            const Box& ebx = amrex::surroundingNodes(bx,dir);
+            auto const& rho    = edgestate[dir].array(S_mfi,0);
+            auto const& rho_F  = cfluxes[dir].array(S_mfi,0);
+            auto const& rhoY   = edgestate[dir].array(S_mfi,rhoYcomp);
+            auto const& rhoY_F = cfluxes[dir].array(S_mfi,rhoYcomp);
+            amrex::ParallelFor(ebx, [rho, rho_F, rhoY, rhoY_F]
+            AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+               rho(i,j,k) = 0.0; 
+               rho_F(i,j,k) = 0.0; 
+               for (int n = 0; n < NUM_SPECIES; n++) {
+                  rho(i,j,k) += rhoY(i,j,k,n);
+                  rho_F(i,j,k) += rhoY_F(i,j,k,n);
+               }
+            });
+         }
+         // TODO: remove StreamSynchronize when all GPU
+#ifdef AMREX_USE_CUDA
+         Gpu::streamSynchronize();
+#endif
+
+
   }
 
-  for (int d=0; d<AMREX_SPACEDIM; ++d)
-  { 
-    EdgeState[d]->FillBoundary(geom.periodicity());
-    EdgeFlux[d]->FillBoundary(geom.periodicity());
-  }
 aofs->FillBoundary(geom.periodicity());
 
   // Extrapolate Temp, then compute flux divergence and value for RhoH from face values of T,Y,Rho
@@ -6201,8 +6217,8 @@ aofs->FillBoundary(geom.periodicity());
   Godunov::ComputeAofs(*aofs, Temp, 1,
                        Smf, Tcomp,
                        AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                       AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), Temp, false,
-                       AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), Temp,
+                       AMREX_D_DECL(edgestate[0], edgestate[1], edgestate[2]), Tcomp, false,
+                       AMREX_D_DECL(cfluxes[0], cfluxes[1], cfluxes[2]), Tcomp,
                        Force, NUM_SPECIES, DivU, math_bcs, geom, iconserv,
                        dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 
@@ -6210,16 +6226,6 @@ aofs->FillBoundary(geom.periodicity());
 
 
 
-  for (int d=0; d<AMREX_SPACEDIM; ++d)
-  {
-EdgeFlux[d]->setVal(0.0,Temp,2);
-}
-
-  for (int d=0; d<AMREX_SPACEDIM; ++d)
-  { 
-    EdgeState[d]->FillBoundary(geom.periodicity());
-    EdgeFlux[d]->FillBoundary(geom.periodicity());
-  }
 aofs->FillBoundary(geom.periodicity());
 
   // Compute RhoH on faces, store in NUM_SPECIES+1 component of edgestate[d]
@@ -6230,29 +6236,32 @@ aofs->FillBoundary(geom.periodicity());
   for (MFIter S_mfi(Smf,TilingIfNotGPU()); S_mfi.isValid(); ++S_mfi)
   {  
     Box bx = S_mfi.tilebox();
-        
-    for (int d=0; d<AMREX_SPACEDIM; ++d)
-    {
-      const Box& ebox = amrex::surroundingNodes(bx,d);
-      auto const& rho     = EdgeState[d]->array(S_mfi,Density);
-      auto const& rhoY    = EdgeState[d]->array(S_mfi,first_spec);
-      auto const& T       = EdgeState[d]->array(S_mfi,Temp);
-      auto const& rhoHm   = EdgeState[d]->array(S_mfi,RhoH);
+  
+// Compute RhoH on faces, store in NUM_SPECIES+1 component of edgestate[d]
+         for (int dir=0; dir<AMREX_SPACEDIM; ++dir)
+         {
+            const Box& ebx = amrex::surroundingNodes(bx,dir);
+            auto const& rho     = edgestate[dir].array(S_mfi,0);
+            auto const& rhoY    = edgestate[dir].array(S_mfi,rhoYcomp);
+            auto const& T       = edgestate[dir].array(S_mfi,NUM_SPECIES+2);
+            auto const& rhoHm   = edgestate[dir].array(S_mfi,NUM_SPECIES+1);
+            auto const& rhoHm_F = cfluxes[dir].array(S_mfi,NUM_SPECIES+1);
+            amrex::ParallelFor(ebx, [ rho, rhoY, T, rhoHm, rhoHm_F ]
+            AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+               getRHmixGivenTY( i, j, k, rho, rhoY, T, rhoHm );
+               rhoHm_F(i,j,k) = rhoHm(i,j,k);                     // Copy RhoH edgestate into edgeflux
+            });
+         }
+         // TODO: remove cudaStreamSynchronize when all GPU
+#ifdef AMREX_USE_CUDA
+         Gpu::streamSynchronize();
+#endif
 
-      amrex::ParallelFor(ebox, [rho, rhoY, T, rhoHm]
-      AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-      {
-          getRHmixGivenTY( i, j, k, rho, rhoY, T, rhoHm );
-      });
-    }
+      
   }
 }
 
-  for (int d=0; d<AMREX_SPACEDIM; ++d)
-  { 
-    EdgeState[d]->FillBoundary(geom.periodicity());
-    EdgeFlux[d]->FillBoundary(geom.periodicity());
-  }
 
 {
   Vector<BCRec> math_bcs(1);
@@ -6272,11 +6281,51 @@ for (MFIter S_mfi(Smf,TilingIfNotGPU()); S_mfi.isValid(); ++S_mfi)
   Godunov::ComputeAofs(*aofs, RhoH, 1,
                        Smf, NUM_SPECIES+1,
                        AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                       AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), RhoH, true,
-                       AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), RhoH,
+                       AMREX_D_DECL(edgestate[0], edgestate[1], edgestate[2]), NUM_SPECIES+1, true,
+                       AMREX_D_DECL(cfluxes[0], cfluxes[1], cfluxes[2]), NUM_SPECIES+1,
                        Force, NUM_SPECIES+1, DivU, math_bcs, geom, iconserv,
                        dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 }
+
+
+
+
+#ifdef _OPENMP
+#pragma omp parallel if (Gpu::notInLaunchRegion())
+#endif
+{
+  for (MFIter S_mfi(Smf,TilingIfNotGPU()); S_mfi.isValid(); ++S_mfi)
+  {
+    Box bx = S_mfi.tilebox();
+
+// Load up non-overlapping bits of edge states and fluxes into mfs: rho + rhoY(s) + rhoH = NUM_SPECIES+2
+         for (int dir=0; dir<AMREX_SPACEDIM; ++dir)
+         {
+            const Box& ebx = S_mfi.nodaltilebox(dir);
+            auto const& state_lcl = edgestate[dir].array(S_mfi,0);  
+            auto const& flux_lcl  = cfluxes[dir].array(S_mfi,0);  
+            auto const& state_gbl = EdgeState[dir]->array(S_mfi,Density);
+            auto const& flux_gbl  = EdgeFlux[dir]->array(S_mfi,Density);
+            amrex::ParallelFor(ebx, [state_lcl,flux_lcl,state_gbl,flux_gbl]
+            AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+               for (int n = 0; n < NUM_SPECIES+2; n++) {
+                  state_gbl(i,j,k,n) = state_lcl(i,j,k,n);
+                  flux_gbl(i,j,k,n)  = flux_lcl(i,j,k,n);
+               }
+            });
+         }
+#ifdef AMREX_USE_CUDA
+         Gpu::streamSynchronize();
+#endif
+  }
+}
+
+
+
+
+
+
 
 
 for (MFIter S_mfi(Smf,TilingIfNotGPU()); S_mfi.isValid(); ++S_mfi)
@@ -6286,13 +6335,13 @@ for (MFIter S_mfi(Smf,TilingIfNotGPU()); S_mfi.isValid(); ++S_mfi)
 //amrex::Print() << (*EdgeFlux[0])[S_mfi];
 }
 
-  for (int d=0; d<AMREX_SPACEDIM; ++d)
-  {
-    EdgeState[d]->FillBoundary(geom.periodicity());
-    EdgeFlux[d]->FillBoundary(geom.periodicity());
-  }
 
 aofs->FillBoundary(geom.periodicity());
+
+
+
+
+
 
 
   for (int dir=0; dir<AMREX_SPACEDIM; dir++) {
@@ -6306,7 +6355,7 @@ aofs->FillBoundary(geom.periodicity());
 
 for (MFIter S_mfi(Smf,TilingIfNotGPU()); S_mfi.isValid(); ++S_mfi)
       {
-amrex::Print() << (*aofs)[S_mfi];
+//amrex::Print() << (*aofs)[S_mfi];
 //amrex::Print() << (*EdgeFlux[0])[S_mfi];
 //amrex::Print() << (*EdgeState[0])[S_mfi];
 }
