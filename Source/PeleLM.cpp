@@ -85,14 +85,6 @@ const int  LinOp_grow  = 1;
 static Real              typical_RhoH_value_default = -1.e10;
 static const std::string typical_values_filename("typical_values.fab");
 
-namespace ACParm
-{
-   AMREX_GPU_DEVICE_MANAGED unsigned int ctrl_active = 0;
-   AMREX_GPU_DEVICE_MANAGED amrex::Real  ctrl_dV = 0.0;
-   AMREX_GPU_DEVICE_MANAGED amrex::Real  ctrl_V_in = 0.0;
-   AMREX_GPU_DEVICE_MANAGED amrex::Real  ctrl_tBase = 0.0;
-}
-
 namespace
 {
   bool initialized = false;
@@ -173,6 +165,9 @@ bool PeleLM::avg_down_chem;
 int  PeleLM::reset_typical_vals_int=-1;
 Real PeleLM::typical_Y_val_min=1.e-10;
 std::map<std::string,Real> PeleLM::typical_values_FileVals;
+
+std::unique_ptr<ProbParm> PeleLM::prob_parm;
+std::unique_ptr<ACParm> PeleLM::ac_parm;
 
 std::string                                PeleLM::turbFile;
 std::map<std::string, Vector<std::string> > PeleLM::auxDiag_names;
@@ -890,7 +885,8 @@ PeleLM::variableCleanUp ()
    ShowMF_Sets.clear();
    auxDiag_names.clear();
    typical_values.clear();
-
+   prob_parm.reset();
+   ac_parm.reset();
 }
 
 PeleLM::PeleLM ()
@@ -912,11 +908,11 @@ PeleLM::PeleLM ()
    // can modify these later
    if (p_amb_old == -1.0)
    {
-      p_amb_old = ProbParm::P_mean;
+      p_amb_old = prob_parm->P_mean;
    }
    if (p_amb_new == -1.0)
    {
-      p_amb_new = ProbParm::P_mean;
+      p_amb_new = prob_parm->P_mean;
    }
 
    updateFluxReg = false;
@@ -956,11 +952,11 @@ PeleLM::PeleLM (Amr&            papa,
   // can modify these later
   if (p_amb_old == -1.0)
   {
-    p_amb_old = ProbParm::P_mean;
+    p_amb_old = prob_parm->P_mean;
   }
   if (p_amb_new == -1.0)
   {
-    p_amb_new = ProbParm::P_mean;
+    p_amb_new = prob_parm->P_mean;
   }
 
   updateFluxReg = false;
@@ -1751,6 +1747,8 @@ PeleLM::initData ()
   S_new.setVal(0.0);
   P_new.setVal(0.0);
 
+  ProbParm const* lprobparm = prob_parm.get();
+
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
@@ -1765,7 +1763,7 @@ PeleLM::initData ()
 #ifdef BL_USE_NEWMECH
         amrex::Abort("USE_NEWMECH feature no longer working and has to be fixed/redone");
 #else
-        pelelm_initdata(i, j, k, sfab, geomdata);
+        pelelm_initdata(i, j, k, sfab, geomdata, *lprobparm);
 #endif
       });
   }
@@ -9031,9 +9029,9 @@ PeleLM::activeControl(const int  step,
    ctrl_coftOld = coft;
 
    // Pass dV and ctrl_V_in to GPU compliant problem routines
-   ACParm::ctrl_V_in = ctrl_V_in;
-   ACParm::ctrl_dV = ctrl_dV;
-   ACParm::ctrl_tBase = ctrl_tBase;
+   ac_parm->ctrl_V_in = ctrl_V_in;
+   ac_parm->ctrl_dV = ctrl_dV;
+   ac_parm->ctrl_tBase = ctrl_tBase;
 
    // Verbose
    if ( ctrl_verbose && !restart) {
@@ -9096,7 +9094,7 @@ PeleLM::initActiveControl()
    if ( !ctrl_active ) return;
 
    // Activate AC in problem specific / GPU compliant sections
-   ACParm::ctrl_active = ctrl_active;
+   ac_parm->ctrl_active = ctrl_active;
 
    // Resize vector for temporal average
    ctrl_time_pts.resize(ctrl_NavgPts+1,-1.0);
@@ -9112,10 +9110,12 @@ PeleLM::initActiveControl()
    }
 
    // Extract data from bc: assumes flow comes in from lo side of ctrl_flameDir
+   ProbParm const* lprobparm = prob_parm.get();
+   ACParm const* lacparm = ac_parm.get();
    amrex::Real s_ext[DEF_NUM_STATE] = {0.0};
    amrex::Real x[AMREX_SPACEDIM] = {D_DECL(problo[0],problo[1],problo[2])};
    x[ctrl_flameDir] -= 1.0;
-   bcnormal(x, s_ext, ctrl_flameDir, 1, -1.0, geom.data());
+   bcnormal(x, s_ext, ctrl_flameDir, 1, -1.0, geom.data(), *lprobparm, *lacparm);
 
    if ( !ctrl_use_temp ) {
       // Get the fuel rhoY
@@ -9138,7 +9138,7 @@ PeleLM::initActiveControl()
    ctrl_V_in_old = ctrl_V_in;
 
    // Pass V_in to bc
-   ACParm::ctrl_V_in = ctrl_V_in;
+   ac_parm->ctrl_V_in = ctrl_V_in;
 
    if ( ctrl_verbose && ctrl_active ) {
       if ( ctrl_use_temp ) {
