@@ -8,6 +8,8 @@
 #include <AMReX_ForkJoin.H>
 
 #include <mechanism.h>
+#include <pelelm_prob_parm.H>
+#include <PeleLM_parm.H>
 
 #include <list>
 #include <map>
@@ -238,10 +240,6 @@ public:
   static amrex::Real Zox;
   static bool        mixture_fraction_ready;
 
-#if !defined(AMREX_USE_CUDA)
-protected:
-#endif
-
   ////////////////////////////////////////////////////////////////////////////
   //    Overriding Virtual Functions in NavierStokesBase                    //
   ////////////////////////////////////////////////////////////////////////////
@@ -333,9 +331,6 @@ protected:
   static void read_particle_params ();
 #endif
 
-#if !defined(AMREX_USE_CUDA)
-private:
-#endif
 
   // enum YdotAction { HT_EstimateYdotNew, HT_ImproveYdotOld, HT_LeaveYdotAlone };
   // enum Solver_Status {HT_InProgress, HT_Stalled, HT_Solved};
@@ -617,6 +612,7 @@ private:
   static int closed_chamber;
   static amrex::Real dpdt_factor;
 
+
   // Active control data
   static bool        ctrl_active;
   static bool        ctrl_use_temp;
@@ -645,6 +641,8 @@ private:
   static amrex::Vector<amrex::Real> ctrl_velo_pts;
   static amrex::Vector<amrex::Real> ctrl_cntl_pts;
 
+  static std::unique_ptr<ProbParm> prob_parm;
+  static std::unique_ptr<ACParm> ac_parm;
   //
   // Protected static data.
   //
