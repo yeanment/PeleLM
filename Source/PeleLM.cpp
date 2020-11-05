@@ -1531,7 +1531,7 @@ PeleLM::estTimeStep ()
    if ( divu_ceiling == 1 ) {
       divu_dt = amrex::ReduceMin(rho_ctime, *DivU, 0,
                                  [divu_check_flag,divu_dt_fac,rho_min,dxinv]
-      AMREX_GPU_HOST_DEVICE (Box const& bx, Array4<Real const> const& rho,
+      AMREX_GPU_DEVICE (Box const& bx, Array4<Real const> const& rho,
                                             Array4<Real const> const& divu ) noexcept -> Real
       {   
          using namespace amrex::literals;
@@ -1556,7 +1556,7 @@ PeleLM::estTimeStep ()
    } else if ( divu_ceiling == 2 ) {
       divu_dt = amrex::ReduceMin(rho_ctime, Umf, *DivU, 0,
                                  [divu_check_flag,divu_dt_fac,rho_min,dxinv]
-      AMREX_GPU_HOST_DEVICE (Box const& bx, Array4<Real const> const& rho,
+      AMREX_GPU_DEVICE (Box const& bx, Array4<Real const> const& rho,
                                             Array4<Real const> const& vel,
                                             Array4<Real const> const& divu ) noexcept -> Real
       {   
@@ -8865,7 +8865,7 @@ PeleLM::activeControl(const int  step,
          }
 
          Real lowT = amrex::ReduceMin(Tmf, 0, [geomdata,AC_Tcross,AC_FlameDir]
-                     AMREX_GPU_HOST_DEVICE(Box const& bx, Array4<Real const> const& T_arr ) noexcept -> Real
+                     AMREX_GPU_DEVICE(Box const& bx, Array4<Real const> const& T_arr ) noexcept -> Real
                      {
                         using namespace amrex::literals;
                         const auto lo = amrex::lbound(bx);
