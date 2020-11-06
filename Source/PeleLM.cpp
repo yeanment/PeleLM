@@ -28,12 +28,14 @@
 #include <AMReX_MLABecLaplacian.H>
 #include <AMReX_MLMG.H>
 #include <NS_util.H>
+#include <AMReX_GpuContainers.H>
 
 #include <PPHYS_CONSTANTS.H>
 #include <PeleLM_K.H>
 #include <pelelm_prob.H>
 #include <pelelm_prob_parm.H>
 #include <PeleLM_parm.H>
+#include <pmf_data.H>
 
 #if defined(BL_USE_NEWMECH) || defined(BL_USE_VELOCITY)
 #include <AMReX_DataServices.H>
@@ -1748,6 +1750,7 @@ PeleLM::initData ()
   P_new.setVal(0.0);
 
   ProbParm const* lprobparm = prob_parm.get();
+  PmfData const* lpmfdata = pmf_data_g;
 
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
@@ -1763,7 +1766,7 @@ PeleLM::initData ()
 #ifdef BL_USE_NEWMECH
         amrex::Abort("USE_NEWMECH feature no longer working and has to be fixed/redone");
 #else
-        pelelm_initdata(i, j, k, sfab, geomdata, *lprobparm);
+        pelelm_initdata(i, j, k, sfab, geomdata, *lprobparm, lpmfdata);
 #endif
       });
   }
@@ -4671,7 +4674,7 @@ PeleLM::predict_velocity (Real  dt)
     }
 
     //velpred=1 only, use_minion=1, ppm_type, slope_order
-    Godunov::ExtrapVelToFaces( Umf, forcing_term, AMREX_AMREX_D_DECL(u_mac[0], u_mac[1], u_mac[2]),
+    Godunov::ExtrapVelToFaces( Umf, forcing_term, AMREX_D_DECL(u_mac[0], u_mac[1], u_mac[2]),
                                m_bcrec_velocity, m_bcrec_velocity_d.dataPtr(), geom, dt,
 			       godunov_use_ppm, godunov_use_forces_in_trans );
 
@@ -6135,9 +6138,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 
   Godunov::ComputeAofs(*aofs, first_spec, NUM_SPECIES,
                         Smf, rhoYcomp,
-                        AMREX_AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                        AMREX_AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), first_spec, false,
-                        AMREX_AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), first_spec,
+                        AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
+                        AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), first_spec, false,
+                        AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), first_spec,
                         Force, 0, DivU, d_bcrec_ptr, geom, iconserv,
                         dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 }
@@ -6192,9 +6195,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 
   Godunov::ComputeAofs(*aofs, Temp, 1,
                        Smf, Tcomp,
-                       AMREX_AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                       AMREX_AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), Temp, false,
-                       AMREX_AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), Temp,
+                       AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
+                       AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), Temp, false,
+                       AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), Temp,
                        Force, NUM_SPECIES, DivU, d_bcrec_ptr, geom, iconserv,
                        dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 
@@ -6235,9 +6238,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 
   Godunov::ComputeAofs(*aofs, RhoH, 1,
                        Smf, NUM_SPECIES+1,
-                       AMREX_AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                       AMREX_AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), RhoH, true,
-                       AMREX_AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), RhoH,
+                       AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
+                       AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), RhoH, true,
+                       AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), RhoH,
                        Force, NUM_SPECIES+1, DivU, d_bcrec_ptr, geom, iconserv,
                        dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 }
@@ -9109,22 +9112,23 @@ PeleLM::initActiveControl()
       if (dim != ctrl_flameDir) area_tot *= (probhi[dim] - problo[dim]);
    }
 
+   //x[ctrl_flameDir] -= 1.0;
    // Extract data from bc: assumes flow comes in from lo side of ctrl_flameDir
    ProbParm const* lprobparm = prob_parm.get();
-   ACParm const* lacparm = ac_parm.get();
-   amrex::Real s_ext[DEF_NUM_STATE] = {0.0};
-   amrex::Real x[AMREX_SPACEDIM] = {AMREX_D_DECL(problo[0],problo[1],problo[2])};
-   x[ctrl_flameDir] -= 1.0;
-   int ctrl_flameDir_l = ctrl_flameDir;
+   ACParm const* lacparm = ac_parm.get(); 
+   PmfData const* lpmfdata = pmf_data_g;
+   amrex::Gpu::DeviceVector<amrex::Real> s_ext_v(DEF_NUM_STATE);
+   amrex::Real* s_ext = s_ext_v.data();
+   const amrex::Real x[AMREX_SPACEDIM] = {AMREX_D_DECL(problo[0],problo[1],problo[2])};
+   const int ctrl_flameDir_l = ctrl_flameDir;
    const amrex::Real time_l = -1.0;
    const auto geomdata = geom.data();
-   // TODO: somehow this is just not working wrapped up in the lambda function. Will need to fix
-   // after the ECP deadline.
-   //amrex::single_task( [x,s_ext,ctrl_flameDir_l,time_l,geomdata,lprobparm,lacparm]
-   //AMREX_GPU_DEVICE() noexcept
-   //{
-   //   bcnormal(x, s_ext, ctrl_flameDir_l, 1, time_l, geomdata, *lprobparm, *lacparm);
-   //});
+   Box dumbx({AMREX_D_DECL(0,0,0)},{AMREX_D_DECL(0,0,0)}); 
+   amrex::ParallelFor(dumbx, [x,s_ext,ctrl_flameDir_l,time_l,geomdata,lprobparm,lacparm, lpmfdata]
+   AMREX_GPU_DEVICE(int i, int j, int k) noexcept
+   {
+      bcnormal(x, s_ext, ctrl_flameDir_l, 1, time_l, geomdata, *lprobparm, *lacparm, lpmfdata);
+   });
 
    if ( !ctrl_use_temp ) {
       // Get the fuel rhoY
