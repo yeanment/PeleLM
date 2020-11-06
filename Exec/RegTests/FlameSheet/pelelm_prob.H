@@ -14,7 +14,7 @@
 #include <EOS.H>
 
 AMREX_GPU_DEVICE
-inline
+AMREX_FORCE_INLINE
 void
 pelelm_initdata (int i, int j, int k, 
                  amrex::Array4<amrex::Real> const& state,
@@ -110,7 +110,7 @@ pelelm_initdata (int i, int j, int k,
 
 }
 
-AMREX_GPU_HOST_DEVICE
+AMREX_GPU_DEVICE
 AMREX_FORCE_INLINE
 void
 bcnormal(
@@ -171,11 +171,10 @@ bcnormal(
       s_ext[DEF_first_spec+n] = massfrac[n] * s_ext[Density];
     }
   }
-
 }
 
 AMREX_GPU_DEVICE
-inline
+AMREX_FORCE_INLINE
 void
 zero_visc (int i, int j, int k,
            amrex::Array4<amrex::Real> const& beta,
