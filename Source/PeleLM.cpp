@@ -9113,9 +9113,18 @@ PeleLM::initActiveControl()
    ProbParm const* lprobparm = prob_parm.get();
    ACParm const* lacparm = ac_parm.get();
    amrex::Real s_ext[DEF_NUM_STATE] = {0.0};
-   amrex::Real x[AMREX_SPACEDIM] = {D_DECL(problo[0],problo[1],problo[2])};
+   amrex::Real x[AMREX_SPACEDIM] = {AMREX_D_DECL(problo[0],problo[1],problo[2])};
    x[ctrl_flameDir] -= 1.0;
-   bcnormal(x, s_ext, ctrl_flameDir, 1, -1.0, geom.data(), *lprobparm, *lacparm);
+   int ctrl_flameDir_l = ctrl_flameDir;
+   const amrex::Real time_l = -1.0;
+   const auto geomdata = geom.data();
+   // TODO: somehow this is just not working wrapped up in the lambda function. Will need to fix
+   // after the ECP deadline.
+   //amrex::single_task( [x,s_ext,ctrl_flameDir_l,time_l,geomdata,lprobparm,lacparm]
+   //AMREX_GPU_DEVICE() noexcept
+   //{
+   //   bcnormal(x, s_ext, ctrl_flameDir_l, 1, time_l, geomdata, *lprobparm, *lacparm);
+   //});
 
    if ( !ctrl_use_temp ) {
       // Get the fuel rhoY
