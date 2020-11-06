@@ -1636,20 +1636,20 @@ PeleLM::checkTimeStep (Real dt)
       auto const& vel      = Umf.array(mfi);
       auto const& divu     = DivU->array(mfi);
       auto const& vol      = volume.const_array(mfi);
-      D_TERM(auto const& areax = (area[0]).const_array(mfi);,
-             auto const& areay = (area[1]).const_array(mfi);,
-             auto const& areaz = (area[2]).const_array(mfi););
+      AMREX_D_TERM(auto const& areax = (area[0]).const_array(mfi);,
+                   auto const& areay = (area[1]).const_array(mfi);,
+                   auto const& areaz = (area[2]).const_array(mfi););
       int  divu_check_flag = divu_ceiling;
       Real divu_dt_fac     = divu_dt_factor;
       Real rho_min         = min_rho_divu_ceiling;
       const auto dxinv     = geom.InvCellSizeArray();
 
-      amrex::ParallelFor(bx, [rho, vel, divu, vol, D_DECL(areax,areay,areaz),
+      amrex::ParallelFor(bx, [rho, vel, divu, vol, AMREX_D_DECL(areax,areay,areaz),
                               divu_check_flag, divu_dt_fac, rho_min, dxinv, dt]
       AMREX_GPU_DEVICE (int i, int j, int k) noexcept
       {
          check_divu_dt(i, j, k, divu_check_flag, divu_dt_fac, rho_min, dxinv,
-                       rho, vel, divu, vol, D_DECL(areax,areay,areaz), dt); 
+                       rho, vel, divu, vol, AMREX_D_DECL(areax,areay,areaz), dt); 
       });
    }
    delete DivU;
@@ -3335,8 +3335,8 @@ PeleLM::differential_diffusion_update (MultiFab& Force,
                                 solve_mode,add_old_time_divFlux,diffuse_this_comp);
 
 #ifdef AMREX_USE_EB
-      EB_set_covered_faces({D_DECL(SpecDiffusionFluxnp1[0],SpecDiffusionFluxnp1[1],SpecDiffusionFluxnp1[2])},0.);
-      EB_set_covered_faces({D_DECL(SpecDiffusionFluxn[0],SpecDiffusionFluxn[1],SpecDiffusionFluxn[2])},0.);
+      EB_set_covered_faces({AMREX_D_DECL(SpecDiffusionFluxnp1[0],SpecDiffusionFluxnp1[1],SpecDiffusionFluxnp1[2])},0.);
+      EB_set_covered_faces({AMREX_D_DECL(SpecDiffusionFluxn[0],SpecDiffusionFluxn[1],SpecDiffusionFluxn[2])},0.);
 #endif
           
       deltaT_iter_norm = Snp1[0]->norm0(Temp);
@@ -3378,7 +3378,7 @@ PeleLM::differential_diffusion_update (MultiFab& Force,
 
 #ifdef AMREX_USE_EB
    set_body_state(*Snp1[0]);
-   EB_set_covered_faces({D_DECL(SpecDiffusionFluxnp1[0],SpecDiffusionFluxnp1[1],SpecDiffusionFluxnp1[2])},0.);
+   EB_set_covered_faces({AMREX_D_DECL(SpecDiffusionFluxnp1[0],SpecDiffusionFluxnp1[1],SpecDiffusionFluxnp1[2])},0.);
 #endif
 
    showMF("mysdc",Dnew,"sdc_Dnew_afterDeltaTiter_inDDupdate",level,1,parent->levelSteps(level));
@@ -3474,7 +3474,7 @@ PeleLM::adjust_spec_diffusion_fluxes (MultiFab* const * flux,
      const BoxArray& ba = getEdgeBoxArray(i);
      edgstate[i].define(ba, dmap, NUM_SPECIES, nghost, MFInfo(), Factory());
    }
-   EB_interp_CellCentroid_to_FaceCentroid(TT, D_DECL(edgstate[0],edgstate[1],edgstate[2]), 0, 0, NUM_SPECIES, geom, math_bc);
+   EB_interp_CellCentroid_to_FaceCentroid(TT, AMREX_D_DECL(edgstate[0],edgstate[1],edgstate[2]), 0, 0, NUM_SPECIES, geom, math_bc);
 #endif
 
 #ifdef _OPENMP
@@ -3616,9 +3616,9 @@ PeleLM::compute_enthalpy_fluxes (MultiFab* const*       flux,
   // Here it is NUM_SPECIES because lambda is stored after the last species (first starts at 0)
   Diffusion::setBeta(op,beta,NUM_SPECIES);
   
-  D_TERM( flux[0]->setVal(0., NUM_SPECIES+2, 1);,
-          flux[1]->setVal(0., NUM_SPECIES+2, 1);,
-          flux[2]->setVal(0., NUM_SPECIES+2, 1););
+  AMREX_D_TERM( flux[0]->setVal(0., NUM_SPECIES+2, 1);,
+                flux[1]->setVal(0., NUM_SPECIES+2, 1);,
+                flux[2]->setVal(0., NUM_SPECIES+2, 1););
 
   // Here it is NUM_SPECIES+2 because this is the heat flux (NUM_SPECIES+3 in enth_diff_terms in fortran)
   // No multiplication by dt here
@@ -3663,7 +3663,7 @@ PeleLM::compute_enthalpy_fluxes (MultiFab* const*       flux,
   }
 
 #ifdef AMREX_USE_EB
-   EB_interp_CellCentroid_to_FaceCentroid(Enth, D_DECL(enth_edgstate[0],enth_edgstate[1],enth_edgstate[2]), 0, 0, NUM_SPECIES, geom, math_bc);
+   EB_interp_CellCentroid_to_FaceCentroid(Enth, AMREX_D_DECL(enth_edgstate[0],enth_edgstate[1],enth_edgstate[2]), 0, 0, NUM_SPECIES, geom, math_bc);
 
 #else
    const Box& domain = geom.Domain();
@@ -4066,7 +4066,7 @@ PeleLM::compute_differential_diffusion_fluxes (const MultiFab& S,
 
 #ifdef AMREX_USE_EB
    // Get rid of flux on covered faces
-   EB_set_covered_faces({D_DECL(flux[0],flux[1],flux[2])},0.);
+   EB_set_covered_faces({AMREX_D_DECL(flux[0],flux[1],flux[2])},0.);
 #endif
 
    // We have just computed "DD" and heat fluxes given an input state.
@@ -4218,9 +4218,9 @@ PeleLM::flux_divergence (MultiFab&        fdiv,
    for (MFIter mfi(fdiv,TilingIfNotGPU()); mfi.isValid(); ++mfi)
    {
       const Box& bx = mfi.tilebox();
-      D_TERM(auto const& fluxX = f[0]->array(mfi,fluxComp);,
-             auto const& fluxY = f[1]->array(mfi,fluxComp);,
-             auto const& fluxZ = f[2]->array(mfi,fluxComp););
+      AMREX_D_TERM(auto const& fluxX = f[0]->array(mfi,fluxComp);,
+                   auto const& fluxY = f[1]->array(mfi,fluxComp);,
+                   auto const& fluxZ = f[2]->array(mfi,fluxComp););
       auto const& divergence   = fdiv.array(mfi,fdivComp);
       auto const& vol          = volume.const_array(mfi);
 
@@ -4239,7 +4239,7 @@ PeleLM::flux_divergence (MultiFab&        fdiv,
          });
       } else if (flagfab.getType(bx) != FabType::regular ) {     // EB containing boxes 
          auto vfrac = ebfactory.getVolFrac().const_array(mfi);
-         amrex::ParallelFor(bx, [nComp, flag, vfrac, divergence, D_DECL(fluxX, fluxY, fluxZ), vol, scale]
+         amrex::ParallelFor(bx, [nComp, flag, vfrac, divergence, AMREX_D_DECL(fluxX, fluxY, fluxZ), vol, scale]
          AMREX_GPU_DEVICE (int i, int j, int k) noexcept
          {
             if ( flag(i,j,k).isCovered() ) {
@@ -4248,12 +4248,12 @@ PeleLM::flux_divergence (MultiFab&        fdiv,
                }
             } else if ( flag(i,j,k).isRegular() ) {
                fluxDivergence( i, j, k, nComp,
-                               D_DECL(fluxX, fluxY, fluxZ),
+                               AMREX_D_DECL(fluxX, fluxY, fluxZ),
                                vol, scale, divergence);
             } else {
                Real vfracinv = 1.0/vfrac(i,j,k);
                fluxDivergence( i, j, k, nComp,
-                               D_DECL(fluxX, fluxY, fluxZ),
+                               AMREX_D_DECL(fluxX, fluxY, fluxZ),
                                vol, scale, divergence);
                for (int n = 0; n < nComp; n++) {
                   divergence(i,j,k,n) *= vfracinv;
@@ -4262,11 +4262,11 @@ PeleLM::flux_divergence (MultiFab&        fdiv,
          });
       } else {                                                   // Regular boxes
 #endif
-         amrex::ParallelFor(bx, [nComp, divergence, D_DECL(fluxX, fluxY, fluxZ), vol, scale]
+         amrex::ParallelFor(bx, [nComp, divergence, AMREX_D_DECL(fluxX, fluxY, fluxZ), vol, scale]
          AMREX_GPU_DEVICE (int i, int j, int k) noexcept
          {
             fluxDivergence( i, j, k, nComp,
-                            D_DECL(fluxX, fluxY, fluxZ),
+                            AMREX_D_DECL(fluxX, fluxY, fluxZ),
                             vol, scale, divergence);
          });
 #ifdef AMREX_USE_EB
@@ -4621,7 +4621,7 @@ PeleLM::predict_velocity (Real  dt)
 #if AMREX_USE_EB
 
    MOL::ExtrapVelToFaces( Umf,
-                          D_DECL(u_mac[0], u_mac[1], u_mac[2]),
+                          AMREX_D_DECL(u_mac[0], u_mac[1], u_mac[2]),
                           geom, m_bcrec_velocity);
 
 #else
@@ -4671,15 +4671,15 @@ PeleLM::predict_velocity (Real  dt)
     }
 
     //velpred=1 only, use_minion=1, ppm_type, slope_order
-    Godunov::ExtrapVelToFaces( Umf, forcing_term, AMREX_D_DECL(u_mac[0], u_mac[1], u_mac[2]),
+    Godunov::ExtrapVelToFaces( Umf, forcing_term, AMREX_AMREX_D_DECL(u_mac[0], u_mac[1], u_mac[2]),
                                m_bcrec_velocity, m_bcrec_velocity_d.dataPtr(), geom, dt,
 			       godunov_use_ppm, godunov_use_forces_in_trans );
 
 #endif
 
-   D_TERM( showMF("mac",u_mac[0],"pv_umac0",level);,
-           showMF("mac",u_mac[1],"pv_umac1",level);,
-           showMF("mac",u_mac[2],"pv_umac2",level););
+   AMREX_D_TERM( showMF("mac",u_mac[0],"pv_umac0",level);,
+                 showMF("mac",u_mac[1],"pv_umac1",level);,
+                 showMF("mac",u_mac[2],"pv_umac2",level););
 
    if (verbose > 1)
    {
@@ -5877,9 +5877,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
      BCRec  const* d_bcrec_ptr = &(m_bcrec_scalars_d.dataPtr())[first_spec-Density];
 
      MOL::ComputeAofs( *aofs, first_spec, NUM_SPECIES, Smf, rhoYcomp,
-                       D_DECL(u_mac[0],u_mac[1],u_mac[2]),
-                       D_DECL(*EdgeState[0],*EdgeState[1],*EdgeState[2]), first_spec, false,
-                       D_DECL(*EdgeFlux[0],*EdgeFlux[1],*EdgeFlux[2]), first_spec,
+                       AMREX_D_DECL(u_mac[0],u_mac[1],u_mac[2]),
+                       AMREX_D_DECL(*EdgeState[0],*EdgeState[1],*EdgeState[2]), first_spec, false,
+                       AMREX_D_DECL(*EdgeFlux[0],*EdgeFlux[1],*EdgeFlux[2]), first_spec,
                        math_bcs, d_bcrec_ptr, geom );
      EB_set_covered(*aofs, 0.);
   }
@@ -5962,12 +5962,12 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     for (int k = 0; k < NUM_SPECIES; ++k) {
        typvals[first_spec+k] = typical_values[first_spec+k]*typical_values[Density];
     }
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},first_spec,NUM_SPECIES,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Temp,1,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Density,1,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},RhoH,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},first_spec,NUM_SPECIES,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Temp,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Density,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},RhoH,1,typvals);
   }
-  EB_set_covered_faces({D_DECL(EdgeFlux[0],EdgeFlux[1],EdgeFlux[2])},0.);
+  EB_set_covered_faces({AMREX_D_DECL(EdgeFlux[0],EdgeFlux[1],EdgeFlux[2])},0.);
 
   // Extrapolate Temp, then compute flux divergence and value for RhoH from face values of T,Y,Rho
   {
@@ -5976,9 +5976,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     BCRec  const* d_bcrec_ptr = &(m_bcrec_scalars_d.dataPtr())[Temp-Density];
 
     MOL::ComputeAofs( *aofs, Temp, 1, Smf, Tcomp,
-		      D_DECL(u_mac[0],u_mac[1],u_mac[2]),
-		      D_DECL(*EdgeState[0],*EdgeState[1],*EdgeState[2]), Temp, false,
-		      D_DECL(*EdgeFlux[0],*EdgeFlux[1],*EdgeFlux[2]), Temp,
+		      AMREX_D_DECL(u_mac[0],u_mac[1],u_mac[2]),
+		      AMREX_D_DECL(*EdgeState[0],*EdgeState[1],*EdgeState[2]), Temp, false,
+		      AMREX_D_DECL(*EdgeFlux[0],*EdgeFlux[1],*EdgeFlux[2]), Temp,
 		      math_bcs, d_bcrec_ptr, geom );
     EB_set_covered(*aofs, 0.);
   }
@@ -5994,10 +5994,10 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     for (int k = 0; k < NUM_SPECIES; ++k) {
        typvals[first_spec+k] = typical_values[first_spec+k]*typical_values[Density];
     }
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},first_spec,NUM_SPECIES,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Temp,1,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Density,1,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},RhoH,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},first_spec,NUM_SPECIES,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Temp,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Density,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},RhoH,1,typvals);
   }
 
   // Compute RhoH on faces, store in NUM_SPECIES+1 component of edgestate[d]
@@ -6058,10 +6058,10 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
     for (int k = 0; k < NUM_SPECIES; ++k) {
        typvals[first_spec+k] = typical_values[first_spec+k]*typical_values[Density];
     }
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},first_spec,NUM_SPECIES,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Temp,1,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Density,1,typvals);
-    EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},RhoH,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},first_spec,NUM_SPECIES,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Temp,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Density,1,typvals);
+    EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},RhoH,1,typvals);
   }
 
   for (int d=0; d<AMREX_SPACEDIM; ++d)
@@ -6078,9 +6078,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
      BCRec  const* d_bcrec_ptr = &(m_bcrec_scalars_d.dataPtr())[RhoH-Density];
 
      MOL::ComputeAofs( *aofs, RhoH, 1, Smf, NUM_SPECIES+1,
-		       D_DECL(u_mac[0],u_mac[1],u_mac[2]),
-		       D_DECL(*EdgeState[0],*EdgeState[1],*EdgeState[2]), RhoH, true,
-		       D_DECL(*EdgeFlux[0],*EdgeFlux[1],*EdgeFlux[2]), RhoH,
+		       AMREX_D_DECL(u_mac[0],u_mac[1],u_mac[2]),
+		       AMREX_D_DECL(*EdgeState[0],*EdgeState[1],*EdgeState[2]), RhoH, true,
+		       AMREX_D_DECL(*EdgeFlux[0],*EdgeFlux[1],*EdgeFlux[2]), RhoH,
 		       math_bcs, d_bcrec_ptr, geom ); 
      EB_set_covered(*aofs, 0.);
   }
@@ -6102,12 +6102,12 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
      for (int k = 0; k < NUM_SPECIES; ++k) {
         typvals[first_spec+k] = typical_values[first_spec+k]*typical_values[Density];
      }
-     EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},first_spec,NUM_SPECIES,typvals);
-     EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Temp,1,typvals);
-     EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Density,1,typvals);
-     EB_set_covered_faces({D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},RhoH,1,typvals);
+     EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},first_spec,NUM_SPECIES,typvals);
+     EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Temp,1,typvals);
+     EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},Density,1,typvals);
+     EB_set_covered_faces({AMREX_D_DECL(EdgeState[0],EdgeState[1],EdgeState[2])},RhoH,1,typvals);
   }
-  EB_set_covered_faces({D_DECL(EdgeFlux[0],EdgeFlux[1],EdgeFlux[2])},0.);
+  EB_set_covered_faces({AMREX_D_DECL(EdgeFlux[0],EdgeFlux[1],EdgeFlux[2])},0.);
  
 #else
   //////////////////////////////////////
@@ -6135,9 +6135,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 
   Godunov::ComputeAofs(*aofs, first_spec, NUM_SPECIES,
                         Smf, rhoYcomp,
-                        AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                        AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), first_spec, false,
-                        AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), first_spec,
+                        AMREX_AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
+                        AMREX_AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), first_spec, false,
+                        AMREX_AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), first_spec,
                         Force, 0, DivU, d_bcrec_ptr, geom, iconserv,
                         dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 }
@@ -6192,9 +6192,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 
   Godunov::ComputeAofs(*aofs, Temp, 1,
                        Smf, Tcomp,
-                       AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                       AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), Temp, false,
-                       AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), Temp,
+                       AMREX_AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
+                       AMREX_AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), Temp, false,
+                       AMREX_AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), Temp,
                        Force, NUM_SPECIES, DivU, d_bcrec_ptr, geom, iconserv,
                        dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 
@@ -6235,9 +6235,9 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 
   Godunov::ComputeAofs(*aofs, RhoH, 1,
                        Smf, NUM_SPECIES+1,
-                       AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
-                       AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), RhoH, true,
-                       AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), RhoH,
+                       AMREX_AMREX_D_DECL( u_mac[0], u_mac[1], u_mac[2] ),
+                       AMREX_AMREX_D_DECL(*EdgeState[0], *EdgeState[1], *EdgeState[2]), RhoH, true,
+                       AMREX_AMREX_D_DECL(*EdgeFlux[0], *EdgeFlux[1], *EdgeFlux[2]), RhoH,
                        Force, NUM_SPECIES+1, DivU, d_bcrec_ptr, geom, iconserv,
                        dt, godunov_use_ppm, godunov_use_forces_in_trans, false );
 }
@@ -6245,12 +6245,12 @@ PeleLM::compute_scalar_advection_fluxes_and_divergence (const MultiFab& Force,
 
 #endif
 
-   D_TERM(showMF("sdc",*EdgeState[0],"sdc_ESTATE_x",level,parent->levelSteps(level));,
-          showMF("sdc",*EdgeState[1],"sdc_ESTATE_y",level,parent->levelSteps(level));,
-          showMF("sdc",*EdgeState[2],"sdc_ESTATE_z",level,parent->levelSteps(level)););
-   D_TERM(showMF("sdc",*EdgeFlux[0],"sdc_FLUX_x",level,parent->levelSteps(level));,
-          showMF("sdc",*EdgeFlux[1],"sdc_FLUX_y",level,parent->levelSteps(level));,
-          showMF("sdc",*EdgeFlux[2],"sdc_FLUX_z",level,parent->levelSteps(level)););
+   AMREX_D_TERM(showMF("sdc",*EdgeState[0],"sdc_ESTATE_x",level,parent->levelSteps(level));,
+                showMF("sdc",*EdgeState[1],"sdc_ESTATE_y",level,parent->levelSteps(level));,
+                showMF("sdc",*EdgeState[2],"sdc_ESTATE_z",level,parent->levelSteps(level)););
+   AMREX_D_TERM(showMF("sdc",*EdgeFlux[0],"sdc_FLUX_x",level,parent->levelSteps(level));,
+                showMF("sdc",*EdgeFlux[1],"sdc_FLUX_y",level,parent->levelSteps(level));,
+                showMF("sdc",*EdgeFlux[2],"sdc_FLUX_z",level,parent->levelSteps(level)););
    showMF("sdc",*aofs,"sdc_aofs",level,parent->levelSteps(level));
 
 // NOTE: Change sense of aofs here so that d/dt ~ aofs...be sure we use our own update function!
@@ -7064,7 +7064,7 @@ PeleLM::mac_sync ()
          }
 
 #ifdef AMREX_USE_EB
-         EB_set_covered_faces({D_DECL(flux[0],flux[1],flux[2])},0.);
+         EB_set_covered_faces({AMREX_D_DECL(flux[0],flux[1],flux[2])},0.);
 #endif
 
          if (level > 0)
@@ -7420,9 +7420,9 @@ PeleLM::differential_spec_diffuse_sync (Real dt,
    for (MFIter mfi(Ssync,TilingIfNotGPU()); mfi.isValid(); ++mfi)
    {
       const Box& bx          = mfi.tilebox();
-      D_TERM(auto const& fluxX = SpecDiffusionFluxnp1[0]->array(mfi,0);,
-             auto const& fluxY = SpecDiffusionFluxnp1[1]->array(mfi,0);,
-             auto const& fluxZ = SpecDiffusionFluxnp1[2]->array(mfi,0););
+      AMREX_D_TERM(auto const& fluxX = SpecDiffusionFluxnp1[0]->array(mfi,0);,
+                   auto const& fluxY = SpecDiffusionFluxnp1[1]->array(mfi,0);,
+                   auto const& fluxZ = SpecDiffusionFluxnp1[2]->array(mfi,0););
       auto const& ssync      = Ssync.array(mfi,first_spec-AMREX_SPACEDIM);
       auto const& vol        = volume.const_array(mfi);
       auto const& rhs_Dsolve = Rhs.const_array(mfi);
@@ -7444,7 +7444,7 @@ PeleLM::differential_spec_diffuse_sync (Real dt,
          });
       } else if (flagfab.getType(bx) != FabType::regular ) {     // EB containing boxes 
          auto vfrac = ebfactory.getVolFrac().const_array(mfi);
-         amrex::ParallelFor(bx, [flag, vfrac, ssync, D_DECL(fluxX, fluxY, fluxZ), vol, rhs_Dsolve, scale]
+         amrex::ParallelFor(bx, [flag, vfrac, ssync, AMREX_D_DECL(fluxX, fluxY, fluxZ), vol, rhs_Dsolve, scale]
          AMREX_GPU_DEVICE (int i, int j, int k) noexcept
          {
             if ( flag(i,j,k).isCovered() ) {
@@ -7453,7 +7453,7 @@ PeleLM::differential_spec_diffuse_sync (Real dt,
                }
             } else if ( flag(i,j,k).isRegular() ) {
                fluxDivergence( i, j, k, NUM_SPECIES,
-                               D_DECL(fluxX, fluxY, fluxZ),
+                               AMREX_D_DECL(fluxX, fluxY, fluxZ),
                                vol, scale, ssync);
                for (int n = 0; n < NUM_SPECIES; n++) {
                   ssync(i,j,k,n) += rhs_Dsolve(i,j,k,n);
@@ -7461,7 +7461,7 @@ PeleLM::differential_spec_diffuse_sync (Real dt,
             } else {
                Real vfracinv = 1.0/vfrac(i,j,k);
                fluxDivergence( i, j, k, NUM_SPECIES,
-                               D_DECL(fluxX, fluxY, fluxZ),
+                               AMREX_D_DECL(fluxX, fluxY, fluxZ),
                                vol, scale, ssync);
                for (int n = 0; n < NUM_SPECIES; n++) {
                   ssync(i,j,k,n) *= vfracinv;
@@ -7471,11 +7471,11 @@ PeleLM::differential_spec_diffuse_sync (Real dt,
          });
       } else {                                                   // Regular boxes
 #endif
-         amrex::ParallelFor(bx, [ssync, D_DECL(fluxX, fluxY, fluxZ), vol, rhs_Dsolve, scale]
+         amrex::ParallelFor(bx, [ssync, AMREX_D_DECL(fluxX, fluxY, fluxZ), vol, rhs_Dsolve, scale]
          AMREX_GPU_DEVICE (int i, int j, int k) noexcept
          {
             fluxDivergence( i, j, k, NUM_SPECIES,
-                            D_DECL(fluxX, fluxY, fluxZ),
+                            AMREX_D_DECL(fluxX, fluxY, fluxZ),
                             vol, scale, ssync);
             for (int n = 0; n < NUM_SPECIES; n++) {
                ssync(i,j,k,n) += rhs_Dsolve(i,j,k,n);
@@ -7489,7 +7489,7 @@ PeleLM::differential_spec_diffuse_sync (Real dt,
    Rhs.clear();
 
 #ifdef AMREX_USE_EB
-   EB_set_covered_faces({D_DECL(SpecDiffusionFluxnp1[0],SpecDiffusionFluxnp1[1],SpecDiffusionFluxnp1[2])},0.);
+   EB_set_covered_faces({AMREX_D_DECL(SpecDiffusionFluxnp1[0],SpecDiffusionFluxnp1[1],SpecDiffusionFluxnp1[2])},0.);
 #endif
 
    //
@@ -7815,9 +7815,9 @@ PeleLM::getViscosity (MultiFab* viscosity[AMREX_SPACEDIM],
 #ifdef AMREX_USE_EB
    // EB : use EB CCentroid -> FCentroid
    auto math_bc = fetchBCArray(State_Type,0,1);
-   EB_interp_CellCentroid_to_FaceCentroid(*visc, D_DECL(*viscosity[0],*viscosity[1],*viscosity[2]), 
+   EB_interp_CellCentroid_to_FaceCentroid(*visc, AMREX_D_DECL(*viscosity[0],*viscosity[1],*viscosity[2]), 
                                           0, 0, 1, geom, math_bc);
-   EB_set_covered_faces({D_DECL(viscosity[0],viscosity[1],viscosity[2])},0.0);
+   EB_set_covered_faces({AMREX_D_DECL(viscosity[0],viscosity[1],viscosity[2])},0.0);
 
 #else
    // NON-EB : simply use center_to_edge_fancy
@@ -7896,9 +7896,9 @@ PeleLM::getDiffusivity (MultiFab* diffusivity[AMREX_SPACEDIM],
 #ifdef AMREX_USE_EB
    // EB : use EB CCentroid -> FCentroid
    auto math_bc = fetchBCArray(State_Type,state_comp,ncomp);
-   EB_interp_CellCentroid_to_FaceCentroid(*diff, D_DECL(*diffusivity[0],*diffusivity[1],*diffusivity[2]), 
+   EB_interp_CellCentroid_to_FaceCentroid(*diff, AMREX_D_DECL(*diffusivity[0],*diffusivity[1],*diffusivity[2]), 
                                           diff_comp, dst_comp, ncomp, geom, math_bc);
-   EB_set_covered_faces({D_DECL(diffusivity[0],diffusivity[1],diffusivity[2])},0.0);
+   EB_set_covered_faces({AMREX_D_DECL(diffusivity[0],diffusivity[1],diffusivity[2])},0.0);
 
 #else
    // NON-EB : simply use center_to_edge_fancy
@@ -7948,9 +7948,9 @@ PeleLM::getDiffusivity_Wbar (MultiFab*  betaWbar[AMREX_SPACEDIM],
 #ifdef AMREX_USE_EB
    // EB : use EB CCentroid -> FCentroid
    auto math_bc = fetchBCArray(State_Type,first_spec,NUM_SPECIES);
-   EB_interp_CellCentroid_to_FaceCentroid(*diff, D_DECL(*betaWbar[0],*betaWbar[1],*betaWbar[2]), 
+   EB_interp_CellCentroid_to_FaceCentroid(*diff, AMREX_D_DECL(*betaWbar[0],*betaWbar[1],*betaWbar[2]), 
                                           0, 0, NUM_SPECIES, geom, math_bc);
-   EB_set_covered_faces({D_DECL(*betaWbar[0],*betaWbar[1],*betaWbar[2])},0.0);
+   EB_set_covered_faces({AMREX_D_DECL(*betaWbar[0],*betaWbar[1],*betaWbar[2])},0.0);
 
 #else
    // NON-EB : simply use center_to_edge_fancy
@@ -8882,9 +8882,9 @@ PeleLM::activeControl(const int  step,
                                         int idx[3] = {i,j,k};
                                         idx[AC_FlameDir] -= 1;
                                         if ( T_arr(idx[0],idx[1],idx[2]) < AC_Tcross ) {
-                                            D_TERM(coor[0] = prob_lo[0] + (i+0.5)*dx[0];,
-                                                   coor[1] = prob_lo[1] + (j+0.5)*dx[1];,
-                                                   coor[2] = prob_lo[2] + (k+0.5)*dx[2];);
+                                            AMREX_D_TERM(coor[0] = prob_lo[0] + (i+0.5)*dx[0];,
+                                                         coor[1] = prob_lo[1] + (j+0.5)*dx[1];,
+                                                         coor[2] = prob_lo[2] + (k+0.5)*dx[2];);
                                             Real slope = ((T_arr(i,j,k) ) - T_arr(idx[0],idx[1],idx[2]))/dx[AC_FlameDir];
                                             lcl_pos = coor[AC_FlameDir] - dx[AC_FlameDir] + ( AC_Tcross - T_arr(idx[0],idx[1],idx[2]) ) / slope;
                                         }
