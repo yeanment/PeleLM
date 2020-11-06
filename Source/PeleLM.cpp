@@ -9118,17 +9118,23 @@ PeleLM::initActiveControl()
    ACParm const* lacparm = ac_parm.get(); 
    PmfData const* lpmfdata = pmf_data_g;
    amrex::Gpu::DeviceVector<amrex::Real> s_ext_v(DEF_NUM_STATE);
-   amrex::Real* s_ext = s_ext_v.data();
+   amrex::Real* s_ext_d = s_ext_v.data();
    const amrex::Real x[AMREX_SPACEDIM] = {AMREX_D_DECL(problo[0],problo[1],problo[2])};
    const int ctrl_flameDir_l = ctrl_flameDir;
    const amrex::Real time_l = -1.0;
    const auto geomdata = geom.data();
    Box dumbx({AMREX_D_DECL(0,0,0)},{AMREX_D_DECL(0,0,0)}); 
-   amrex::ParallelFor(dumbx, [x,s_ext,ctrl_flameDir_l,time_l,geomdata,lprobparm,lacparm, lpmfdata]
+   amrex::ParallelFor(dumbx, [x,s_ext_d,ctrl_flameDir_l,time_l,geomdata,lprobparm,lacparm, lpmfdata]
    AMREX_GPU_DEVICE(int i, int j, int k) noexcept
    {
-      bcnormal(x, s_ext, ctrl_flameDir_l, 1, time_l, geomdata, *lprobparm, *lacparm, lpmfdata);
+      bcnormal(x, s_ext_d, ctrl_flameDir_l, 1, time_l, geomdata, *lprobparm, *lacparm, lpmfdata);
    });
+   amrex::Real s_ext[DEF_NUM_STATE];
+#if AMREX_USE_CUDA
+   amrex::Gpu::dtoh_memcpy(s_ext,s_ext_d,sizeof(amrex::Real)*DEF_NUM_STATE);
+#else
+   std::memcpy(s_ext,s_ext_d,sizeof(amrex::Real)*DEF_NUM_STATE);
+#endif
 
    if ( !ctrl_use_temp ) {
       // Get the fuel rhoY
