@@ -7,6 +7,7 @@
 
 #include <pelelm_prob_parm.H>
 #include <pmf.H>
+#include <pmf_data.H>
 #include <PeleLM_parm.H>
 
 #include <NavierStokesBase.H>
@@ -18,7 +19,8 @@ AMREX_FORCE_INLINE
 void
 pelelm_initdata (int i, int j, int k, 
                  amrex::Array4<amrex::Real> const& state,
-                 amrex::GeometryData const& geomdata, ProbParm const& prob_parm)
+                 amrex::GeometryData const& geomdata, ProbParm const& prob_parm,
+                 PmfData const *pmf_data)
 {
 
     const amrex::Real* prob_lo = geomdata.ProbLo();
@@ -77,7 +79,7 @@ pelelm_initdata (int i, int j, int k,
     y2 = (z - prob_parm.standoff + 0.5*dx[2] + pert)*100;
 #endif
 
-    PMF::pmf(y1, y2, pmf_vals);
+    PMF::pmf(pmf_data,y1, y2, pmf_vals);
 
     state(i,j,k,DEF_Temp) = pmf_vals[0];;
 
@@ -121,7 +123,8 @@ bcnormal(
   const amrex::Real time,
   amrex::GeometryData const& geomdata,
   ProbParm const& prob_parm,
-  ACParm const& ac_parm)
+  ACParm const& ac_parm,
+  PmfData const *pmf_data)
 {
   const amrex::Real* prob_lo = geomdata.ProbLo();
   const amrex::Real* prob_hi = geomdata.ProbHi();
@@ -130,7 +133,7 @@ bcnormal(
   amrex::Real massfrac[NUM_SPECIES] = {0.0};
 
   if (sgn == 1) {
-    PMF::pmf(prob_hi[idir], prob_hi[idir], pmf_vals);
+    PMF::pmf(pmf_data,prob_hi[idir], prob_hi[idir], pmf_vals);
 
     if (!ac_parm.ctrl_active || time <= 0.0) {
        s_ext[Xvel] = 0.0;
