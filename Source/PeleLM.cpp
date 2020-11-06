@@ -36,6 +36,7 @@
 #include <pelelm_prob_parm.H>
 #include <PeleLM_parm.H>
 #include <pmf_data.H>
+#include <trans_parm.H>
 
 #if defined(BL_USE_NEWMECH) || defined(BL_USE_VELOCITY)
 #include <AMReX_DataServices.H>
@@ -1288,9 +1289,21 @@ PeleLM::init_mixture_fraction()
       // Compute each species weight for the Bilger formulation based on elemental compo
       // Only interested in CHON -in that order.
       int ecompCHON[NUM_SPECIES*4];
-      amrex::Real mwt[NUM_SPECIES];
       EOS::element_compositionCHON(ecompCHON);
-      EOS::molecular_weight(mwt);
+      amrex::Gpu::DeviceVector<amrex::Real> mwt_v(NUM_SPECIES);
+      amrex::Real* mwt_d = mwt_v.data();
+      Box dumbx({AMREX_D_DECL(0,0,0)},{AMREX_D_DECL(0,0,0)});
+      amrex::ParallelFor(dumbx, [mwt_d]
+      AMREX_GPU_DEVICE(int i, int j, int k) noexcept
+      { 
+         EOS::molecular_weight(mwt_d);
+      });
+      amrex::Real mwt[NUM_SPECIES];
+#if AMREX_USE_CUDA
+      amrex::Gpu::dtoh_memcpy(mwt,mwt_d,sizeof(amrex::Real)*NUM_SPECIES);
+#else
+      std::memcpy(mwt,mwt_d,sizeof(amrex::Real)*NUM_SPECIES);
+#endif
       Zfu = 0.0;
       Zox = 0.0;
       for (int i=0; i<NUM_SPECIES; ++i) {
@@ -7673,6 +7686,9 @@ PeleLM::calcViscosity (const Real time,
    FillPatchIterator fpi(*this,S,nGrow,time,State_Type,sComp,nComp);
    MultiFab& S_cc = fpi.get_mf();
 
+   // Get the transport GPU data pointer
+   TransParm const* ltransparm = trans_parm_g;
+
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
@@ -7683,10 +7699,10 @@ PeleLM::calcViscosity (const Real time,
       auto const& T       = S_cc.array(mfi,Tcomp);
       auto const& mu      = visc.array(mfi);
 
-      amrex::ParallelFor(gbx, [rhoY, T, mu]
+      amrex::ParallelFor(gbx, [rhoY, T, mu, ltransparm]
       AMREX_GPU_DEVICE (int i, int j, int k) noexcept
       {
-         getVelViscosity( i, j, k, rhoY, T, mu);
+         getVelViscosity( i, j, k, rhoY, T, mu, ltransparm);
       });
    }
 
@@ -7729,6 +7745,9 @@ PeleLM::calcDiffusivity (const Real time)
    int Tcomp  = Temp       - sComp;
    int RYcomp = first_spec - sComp;
 
+   // Get the transport GPU data pointer
+   TransParm const* ltransparm = trans_parm_g;
+
    // Fillpatch the state   
    FillPatchIterator fpi(*this,S,nGrow,time,State_Type,sComp,nComp);
    MultiFab& S_cc = fpi.get_mf();
@@ -7748,16 +7767,16 @@ PeleLM::calcDiffusivity (const Real time)
       if ( unity_Le ) {
          amrex::Real ScInv = 1.0/schmidt;
          amrex::Real PrInv = 1.0/prandtl;
-         amrex::ParallelFor(gbx, [rhoY, T, rhoD, lambda, mu, ScInv, PrInv] 
+         amrex::ParallelFor(gbx, [rhoY, T, rhoD, lambda, mu, ScInv, PrInv, ltransparm] 
          AMREX_GPU_DEVICE (int i, int j, int k) noexcept
          {
-            getTransportCoeffUnityLe( i, j, k, ScInv, PrInv, rhoY, T, rhoD, lambda, mu);
+            getTransportCoeffUnityLe( i, j, k, ScInv, PrInv, rhoY, T, rhoD, lambda, mu, ltransparm);
          });
       } else {
-         amrex::ParallelFor(gbx, [rhoY, T, rhoD, lambda, mu]
+         amrex::ParallelFor(gbx, [rhoY, T, rhoD, lambda, mu, ltransparm]
          AMREX_GPU_DEVICE (int i, int j, int k) noexcept
          {
-            getTransportCoeff( i, j, k, rhoY, T, rhoD, lambda, mu);
+            getTransportCoeff( i, j, k, rhoY, T, rhoD, lambda, mu, ltransparm);
          });
       }
    }

@@ -34,7 +34,7 @@
 #include <AMReX_FArrayBox.H>
 #include <AMReX_Utility.H>
 #include <EOS.H>
-#include <Transport.H>
+#include <TransportSimple.H>
 
 #include <PeleLM_derive.H>
 #include <IndexDefines.H>
