@@ -1299,7 +1299,7 @@ PeleLM::init_mixture_fraction()
          EOS::molecular_weight(mwt_d);
       });
       amrex::Real mwt[NUM_SPECIES];
-#if AMREX_USE_CUDA
+#if defined(AMREX_USE_CUDA) || defined(AMREX_USE_HIP)
       amrex::Gpu::dtoh_memcpy(mwt,mwt_d,sizeof(amrex::Real)*NUM_SPECIES);
 #else
       std::memcpy(mwt,mwt_d,sizeof(amrex::Real)*NUM_SPECIES);
@@ -1438,7 +1438,7 @@ PeleLM::set_typical_values(bool is_restart)
       }
       typical_values_chem[NUM_SPECIES] = typical_values[Temp];
       SetTypValsODE(typical_values_chem);
-#ifndef AMREX_USE_CUDA
+#if !defined(AMREX_USE_CUDA) && !defined(AMREX_USE_HIP)
       ReSetTolODE();
 #endif  
       }
@@ -1538,7 +1538,7 @@ PeleLM::estTimeStep ()
    int  divu_check_flag = divu_ceiling;
    Real divu_dt_fac     = divu_dt_factor;
    Real rho_min         = min_rho_divu_ceiling;
-   const auto dxinv     = geom.InvCellSizeArray();
+   const auto& dxinv    = geom.InvCellSizeArray();
 
    FillPatchIterator U_fpi(*this,*DivU,nGrow,cur_time,State_Type,Xvel,AMREX_SPACEDIM);
    MultiFab& Umf=U_fpi.get_mf();
@@ -1546,7 +1546,7 @@ PeleLM::estTimeStep ()
    if ( divu_ceiling == 1 ) {
       divu_dt = amrex::ReduceMin(rho_ctime, *DivU, 0,
                                  [divu_check_flag,divu_dt_fac,rho_min,dxinv]
-      AMREX_GPU_DEVICE (Box const& bx, Array4<Real const> const& rho,
+      AMREX_GPU_HOST_DEVICE (Box const& bx, Array4<Real const> const& rho,
                                             Array4<Real const> const& divu ) noexcept -> Real
       {   
          using namespace amrex::literals;
@@ -1571,7 +1571,7 @@ PeleLM::estTimeStep ()
    } else if ( divu_ceiling == 2 ) {
       divu_dt = amrex::ReduceMin(rho_ctime, Umf, *DivU, 0,
                                  [divu_check_flag,divu_dt_fac,rho_min,dxinv]
-      AMREX_GPU_DEVICE (Box const& bx, Array4<Real const> const& rho,
+      AMREX_GPU_HOST_DEVICE (Box const& bx, Array4<Real const> const& rho,
                                             Array4<Real const> const& vel,
                                             Array4<Real const> const& divu ) noexcept -> Real
       {   
@@ -5634,7 +5634,7 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
 
     BoxArray  ba           = mf_new.boxArray();
     DistributionMapping dm = mf_new.DistributionMap();
-#ifndef AMREX_USE_CUDA
+#if !defined(AMREX_USE_CUDA) && !defined(AMREX_USE_HIP)
     //
     // Chop the grids to level out the chemistry work when on the CPU.
     // We want enough grids so that KNAPSACK works well,
@@ -5723,23 +5723,27 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
            frc_rhoH(i,j,k) *= 10.0;
         });
 
-#ifdef AMREX_USE_CUDA
+#if defined(AMREX_USE_CUDA) || defined(AMREX_USE_HIP)
         const auto ec           = Gpu::ExecutionConfig(ncells);
-        cudaError_t cuda_status = cudaSuccess;
+        DEVICE_ERROR_TYPE device_status = DEVICE_SUCCESS;
 #endif
 
         BL_PROFILE_VAR("React()", ReactInLoop);
         Real dt_incr     = dt;
         Real time_chem   = 0;
-#ifndef AMREX_USE_CUDA
+#if !defined(AMREX_USE_CUDA) && !defined(AMREX_USE_HIP)
         /* Solve */
         int tmp_fctCn = react(bx, rhoY, frc_rhoY, temp, rhoH, frc_rhoH, fcl, mask, dt_incr, time_chem);
         dt_incr   = dt;
         time_chem = 0;
 #else
         int reactor_type = 2;
+#if defined(AMREX_USE_CUDA) || defined(AMREX_USE_HIP)
+	DEVICE_STREAM_TYPE stream = amrex::Gpu::gpuStream();
+#endif
+
         int tmp_fctCn = react(bx, rhoY, frc_rhoY, temp, rhoH, frc_rhoH, fcl, mask, 
-                              dt_incr, time_chem, reactor_type, amrex::Gpu::gpuStream());
+                              dt_incr, time_chem, reactor_type, stream);
         dt_incr = dt;
         time_chem = 0;
 #endif
@@ -5755,8 +5759,10 @@ PeleLM::advance_chemistry (MultiFab&       mf_old,
            rhoH(i,j,k) *= 0.1;
         });
 
-#ifdef AMREX_USE_CUDA
-        cuda_status = cudaStreamSynchronize(amrex::Gpu::gpuStream());
+#if defined(AMREX_USE_CUDA)
+        device_status = cudaStreamSynchronize(stream);
+#elif defined(AMREX_USE_HIP)
+        device_status = hipStreamSynchronize(stream);
 #endif
 
     }
@@ -8887,7 +8893,7 @@ PeleLM::activeControl(const int  step,
          }
 
          Real lowT = amrex::ReduceMin(Tmf, 0, [geomdata,AC_Tcross,AC_FlameDir]
-                     AMREX_GPU_DEVICE(Box const& bx, Array4<Real const> const& T_arr ) noexcept -> Real
+                     AMREX_GPU_HOST_DEVICE(Box const& bx, Array4<Real const> const& T_arr ) noexcept -> Real
                      {
                         using namespace amrex::literals;
                         const auto lo = amrex::lbound(bx);
@@ -9149,7 +9155,7 @@ PeleLM::initActiveControl()
       bcnormal(x, s_ext_d, ctrl_flameDir_l, 1, time_l, geomdata, *lprobparm, *lacparm, lpmfdata);
    });
    amrex::Real s_ext[DEF_NUM_STATE];
-#if AMREX_USE_CUDA
+#if defined(AMREX_USE_CUDA) || defined(AMREX_USE_HIP)
    amrex::Gpu::dtoh_memcpy(s_ext,s_ext_d,sizeof(amrex::Real)*DEF_NUM_STATE);
 #else
    std::memcpy(s_ext,s_ext_d,sizeof(amrex::Real)*DEF_NUM_STATE);

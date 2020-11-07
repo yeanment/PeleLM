@@ -742,8 +742,8 @@ check_divu_dt(int i, int j, int k,
 }
 
 // Full est_divu_dt function - TODO: not available due to limitation of amrex::ReduceMin
-AMREX_GPU_DEVICE
-inline
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
 amrex::Real
 est_divu_dt(int i, int j, int k,
             int                                          const& step_type,
@@ -798,8 +798,8 @@ est_divu_dt(int i, int j, int k,
 }
 
 // DivuCeiling type 1 est_divu_dt function
-AMREX_GPU_DEVICE
-inline
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
 amrex::Real
 est_divu_dt_1(int i, int j, int k,
               int                                          const& step_type,
@@ -824,8 +824,8 @@ est_divu_dt_1(int i, int j, int k,
 }
 
 // DivuCeiling type 2 est_divu_dt function
-AMREX_GPU_DEVICE
-inline
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
 amrex::Real
 est_divu_dt_2(int i, int j, int k,
               int                                          const& step_type,
