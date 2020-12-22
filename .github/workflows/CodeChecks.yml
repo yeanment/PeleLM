@@ -13,8 +13,8 @@ jobs:
     - name: System Dependencies
       run: |
         sudo apt-get install -y python3-setuptools 
-        python3 -m pip install wheel
-        python3 -m pip install compiledb   
+        python3 -m pip install --user wheel
+        python3 -m pip install --user compiledb   
         brew install cppcheck
     - name: Repo Dependencies
       run: Tools/CloneDeps.sh
@@ -27,4 +27,4 @@ jobs:
       run: |
         cd Exec/RegTests/FlameSheet/
         make TPL COMP=gnu USE_MPI=FALSE
-        compiledb make
+        python3 -m compiledb make
