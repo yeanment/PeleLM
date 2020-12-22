@@ -28,3 +28,4 @@ jobs:
         cd Exec/RegTests/FlameSheet/
         make TPL COMP=gnu USE_MPI=FALSE
         python3 -m compiledb make COMP=gnu USE_MPI=FALSE
+        cat compile_commands.json
