@@ -28,4 +28,7 @@ jobs:
         cd Exec/RegTests/FlameSheet/
         make TPL COMP=gnu USE_MPI=FALSE
         python3 -m compiledb make COMP=gnu USE_MPI=FALSE
-        cat compile_commands.json
+        cppcheck --inline-suppr --suppress=unmatchedSuppression --std=c++14 \
+            --language=c++ --enable=all --project=compile_commands.json \
+            --file-filter=${GITHUB_WORKSPACE}/Source/PeleLM* --output-file=cppcheck.txt
+        cat cppcheck.txt
