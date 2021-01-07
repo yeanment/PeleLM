@@ -14,7 +14,7 @@ jobs:
       run: |
         sudo apt-get install -y python3-setuptools 
         python3 -m pip install --user wheel
-        python3 -m pip install --user compiledb   
+        python3 -m pip install --user compiledb
         brew install cppcheck
     - name: Repo Dependencies
       run: Tools/CloneDeps.sh
@@ -27,9 +27,44 @@ jobs:
       run: |
         cd Exec/RegTests/FlameSheet/
         make TPL COMP=gnu USE_MPI=FALSE
-        python3 -m compiledb -n make COMP=gnu USE_MPI=FALSE
+        python3 -m compiledb --command-style make COMP=gnu USE_MPI=FALSE
+        # compiledb fails to handle PP TPL. Fix.
+        sed -i "s#INSTALL/make#INSTALL/gnu/include#g" compile_commands.json
         cppcheck --template=gcc --inline-suppr --suppress=unmatchedSuppression --std=c++14 \
             --language=c++ --enable=all --project=compile_commands.json \
             -i${GITHUB_WORKSPACE}/build/amrex/* -i${GITHUB_WORKSPACE}/build/PelePhysics/* \
             --output-file=cppcheck.txt
         cat cppcheck.txt
+
+  #Run cppcheck off FlameSheet
+  CLANG-TIDY:
+    name: clang-tidy [FS2D]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: System Dependencies
+      run: |
+        sudo apt-get install -y python3-setuptools 
+        python3 -m pip install --user wheel
+        python3 -m pip install --user compiledb
+        sudo apt-get install -y clang-tidy-10
+        sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy /usr/bin/clang-tidy-10 100
+    - name: Repo Dependencies
+      run: Tools/CloneDeps.sh
+    - name: Build
+      env:
+         AMREX_HOME: ${GITHUB_WORKSPACE}/build/amrex
+         IAMR_HOME: ${GITHUB_WORKSPACE}/build/IAMR
+         PELE_PHYSICS_HOME: ${GITHUB_WORKSPACE}/build/PelePhysics
+         PELELM_HOME: ${GITHUB_WORKSPACE}
+      run: |
+        cd Exec/RegTests/FlameSheet/
+        make TPL COMP=gnu USE_MPI=FALSE
+        python3 -m compiledb --command-style make COMP=gnu USE_MPI=FALSE
+        # compiledb fails to handle PP TPL. Fix.
+        sed -i "s#INSTALL/make#INSTALL/gnu/include#g" compile_commands.json
+        # Run
+        run-clang-tidy-10.py -header-filter=.* > Tidy-Full.txt
+        # Filter
+        cat Tidy-Full.txt | grep "warning:" | grep -v "amrex" | grep -v "PelePhysics" | sort | uniq | sort -nr \
+                          | awk 'BEGIN{i=0}{print $0}{i++}END{print "Warnings: "i}'
