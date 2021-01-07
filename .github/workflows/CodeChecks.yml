@@ -62,7 +62,7 @@ jobs:
         make TPL COMP=gnu USE_MPI=FALSE
         python3 -m compiledb --command-style make COMP=gnu USE_MPI=FALSE
         # compiledb fails to handle PP TPL. Fix.
-        sed -i "s#INSTALL/make#INSTALL/gnu/include#g" compile_commands.json
+        sed -i "s#INSTALL/make:#INSTALL/gnu/include#g" compile_commands.json
         # Run
         run-clang-tidy-10.py -header-filter=.* > Tidy-Full.txt
         # Filter
