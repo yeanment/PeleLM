@@ -66,7 +66,7 @@ jobs:
         sed -i "s#INSTALL/make:#INSTALL/gnu.DEBUG/include#g" compile_commands.json
         cat compile_commands.json
         # Run
-        run-clang-tidy-10.py -header-filter=.*
+        run-clang-tidy-10.py -header-filter=.* > Tidy-Full.txt
         # Filter
         cat Tidy-Full.txt | grep "warning:" | grep -v "amrex" | grep -v "PelePhysics" | sort | uniq | sort -nr \
                           | awk 'BEGIN{i=0}{print $0}{i++}END{print "Warnings: "i}'
