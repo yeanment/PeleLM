@@ -7,7 +7,7 @@ jobs:
   #Run cppcheck off FlameSheet
   CppCheck:
     name: CppCheck [FS2D]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v2
     - name: System Dependencies
@@ -15,7 +15,7 @@ jobs:
         sudo apt-get install -y python3-setuptools 
         python3 -m pip install --user wheel
         python3 -m pip install --user compiledb
-        brew install cppcheck
+        sudo apt-get install -y cppcheck
     - name: Repo Dependencies
       run: Tools/CloneDeps.sh
     - name: Build
@@ -30,6 +30,7 @@ jobs:
         python3 -m compiledb --command-style make COMP=gnu USE_MPI=FALSE
         # compiledb fails to handle PP TPL. Fix.
         sed -i "s#INSTALL/make:#INSTALL/gnu/include#g" compile_commands.json
+        cppcheck --version
         cppcheck --template=gcc --inline-suppr --suppress=unmatchedSuppression --std=c++14 \
             --language=c++ --enable=all --project=compile_commands.json \
             -i${GITHUB_WORKSPACE}/build/amrex/* -i${GITHUB_WORKSPACE}/build/PelePhysics/* \
@@ -63,8 +64,9 @@ jobs:
         python3 -m compiledb --command-style make COMP=gnu USE_MPI=FALSE
         # compiledb fails to handle PP TPL. Fix.
         sed -i "s#INSTALL/make:#INSTALL/gnu/include#g" compile_commands.json
+        cat compile_commands.json
         # Run
-        run-clang-tidy-10.py -header-filter=.* > Tidy-Full.txt
+        run-clang-tidy-10.py -header-filter=.*
         # Filter
         cat Tidy-Full.txt | grep "warning:" | grep -v "amrex" | grep -v "PelePhysics" | sort | uniq | sort -nr \
                           | awk 'BEGIN{i=0}{print $0}{i++}END{print "Warnings: "i}'
